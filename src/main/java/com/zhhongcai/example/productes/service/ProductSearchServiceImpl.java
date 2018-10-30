@@ -6,7 +6,11 @@ import com.google.common.base.Splitter;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.zhhongcai.example.productes.dto.*;
+import com.zhhongcai.example.productes.dto.Page;
+import com.zhhongcai.example.productes.dto.ProductIndex;
+import com.zhhongcai.example.productes.dto.ProductSearchReqDto;
+import com.zhhongcai.example.productes.dto.ProductSearchRespDto;
+import com.zhhongcai.example.productes.dto.SelectingSkuDto;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.lucene.search.join.ScoreMode;
 import org.elasticsearch.action.search.MultiSearchRequest;
@@ -19,7 +23,11 @@ import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.query.RangeQueryBuilder;
 import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.aggregations.Aggregation;
+import org.elasticsearch.search.aggregations.AggregationBuilders;
+import org.elasticsearch.search.aggregations.metrics.valuecount.ParsedValueCount;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
+import org.elasticsearch.search.sort.NestedSortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortMode;
 import org.elasticsearch.search.sort.SortOrder;
@@ -32,7 +40,12 @@ import org.springframework.util.CollectionUtils;
 import javax.annotation.Resource;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * @Author: caizhh
@@ -44,6 +57,9 @@ public class ProductSearchServiceImpl implements ProductSearchService {
 
     @Value("${product.index.name}")
     private String indexName;
+
+    @Value("${discountPercentList}")
+    private String discountPercentList;
 
     private Logger logger = LoggerFactory.getLogger(ProductSearchServiceImpl.class);
 
@@ -62,69 +78,17 @@ public class ProductSearchServiceImpl implements ProductSearchService {
             return buildFromSearchResponse(reqDto.getShopId(), null, reqDto.getPageNum(), reqDto.getPageSize());
         }
         SearchRequest searchRequest = new SearchRequest(new String[]{indexName}, sb);
+//        searchRequest.scroll(new TimeValue(1, TimeUnit.MINUTES));
         SearchResponse response = restHighLevelClient.search(searchRequest);
 
         return buildFromSearchResponse(reqDto.getShopId(), response, reqDto.getPageNum(), reqDto.getPageSize());
     }
 
-    private SearchSourceBuilder buildSearchSourceBuilder(ProductSearchReqDto reqDto) {
+    private SearchSourceBuilder buildSearchSourceBuilder(ProductSearchReqDto reqDto) throws Exception {
         BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
-        //审核通过
-        boolQuery.filter(QueryBuilders.termQuery("skuInfos.status", 1));
-        if (StringUtils.isNotBlank(reqDto.getSpuOrSku())) {
-//            boolQuery.filter(QueryBuilders.termsQuery("skuInfos.skuId", Lists.newArrayList(11L)));
+        if (!needQuery(reqDto, boolQuery)) {
+            return null;
         }
-        //品牌
-        Optional.ofNullable(reqDto.getBrandId()).ifPresent(brandId ->
-                boolQuery.filter(QueryBuilders.termQuery("brandId", brandId)));
-        //供应商
-        Optional.ofNullable(reqDto.getProviderId()).ifPresent(providerId ->
-                boolQuery.filter(QueryBuilders.termQuery("providerId", providerId)));
-        //TODO 仓库地址
-        if (StringUtils.isNotBlank(reqDto.getWarehouseLocation())) {
-            boolQuery.filter(QueryBuilders.nestedQuery("inventoryInfos",
-                    QueryBuilders.termsQuery("inventoryInfos.warehouseId", Lists.newArrayList(11L)), ScoreMode.None));
-        }
-        //TODO 关键字 品类 品牌?
-        if (StringUtils.isNotBlank(reqDto.getKeyword())) {
-            boolQuery.filter(QueryBuilders.multiMatchQuery(reqDto.getKeyword(), "productModel", "productName"));
-        }
-        //品类
-        Optional.ofNullable(reqDto.getCategoryId()).ifPresent(categoryId ->
-                boolQuery.filter(QueryBuilders.wildcardQuery("categoryIdPath", "*" + categoryId + "*")));
-        //语言
-        if (StringUtils.isNotBlank(reqDto.getLanguage())) {
-            boolQuery.filter(QueryBuilders.termQuery("language", reqDto.getLanguage()));
-        }
-        //币别
-        if (StringUtils.isNotBlank(reqDto.getCurrency())) {
-            boolQuery.filter(QueryBuilders.termQuery("currency", reqDto.getCurrency()));
-        }
-        //价格from
-        Optional.ofNullable(reqDto.getPriceFrom()).ifPresent(priceFrom -> boolQuery.filter(
-                QueryBuilders.rangeQuery("skuInfos.retailPrice").from(priceFrom)));
-        //价格to
-        Optional.ofNullable(reqDto.getPriceTo()).ifPresent(priceTo -> boolQuery.filter(
-                QueryBuilders.rangeQuery("skuInfos.retailPrice").to(priceTo)));
-        //库存from
-        Optional.ofNullable(reqDto.getQuantityFrom()).ifPresent(quantityFrom -> boolQuery.filter(
-                QueryBuilders.nestedQuery("inventoryInfos.itemQuantities",
-                        QueryBuilders.rangeQuery("inventoryInfos.itemQuantities.quantity").from(quantityFrom), ScoreMode.None)));
-        //库存to
-        Optional.ofNullable(reqDto.getQuantityTo()).ifPresent(quantityTo -> boolQuery.filter(
-                QueryBuilders.nestedQuery("inventoryInfos.itemQuantities",
-                        QueryBuilders.rangeQuery("inventoryInfos.itemQuantities.quantity").from(quantityTo), ScoreMode.None)));
-        //价格降幅
-        Optional.ofNullable(reqDto.getDiscountPercent()).ifPresent(discountPercent -> {
-            if (discountPercent > 0) {
-                boolQuery.filter(QueryBuilders.rangeQuery("skuInfos.discount").from((double) discountPercent / -100.0));
-            }
-        });
-        //上架时间
-        Optional.ofNullable(reqDto.getOnSaleTime()).ifPresent(onSaleTime -> {
-            String time = sdf.format(new Date(System.currentTimeMillis() - onSaleTime * 3600000 * 24L));
-            boolQuery.filter(QueryBuilders.rangeQuery("skuInfos.onlineTime").from(time));
-        });
 
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         if (!CollectionUtils.isEmpty(boolQuery.filter())) {
@@ -138,6 +102,7 @@ public class ProductSearchServiceImpl implements ProductSearchService {
             if ("quantity".equalsIgnoreCase(reqDto.getSortItem())) {
                 //库存
                 sourceBuilder.sort(SortBuilders.fieldSort("inventoryInfos.itemQuantities.quantity")
+                        .setNestedSort(new NestedSortBuilder("inventoryInfos.itemQuantities"))
                         .sortMode(SortMode.SUM).order(sortOrder));
             } else if ("sales_volume".equalsIgnoreCase(reqDto.getSortItem())) {
                 //销量
@@ -154,10 +119,103 @@ public class ProductSearchServiceImpl implements ProductSearchService {
             sourceBuilder.sort(SortBuilders.fieldSort("skuInfos.onlineTime").sortMode(SortMode.MAX).order(sortOrder));
         }
         //分页
-        sourceBuilder.from((reqDto.getPageNum() - 1) * reqDto.getPageSize()).size(reqDto.getPageSize());
-//        sourceBuilder.explain(true);
+        sourceBuilder.from((reqDto.getPageNum() - 1) * reqDto.getPageSize())
+                .size(reqDto.getPageSize());
         logger.info("sourceBuilder: " + sourceBuilder.toString());
         return sourceBuilder;
+    }
+
+    private boolean needQuery(ProductSearchReqDto reqDto, BoolQueryBuilder boolQuery) throws Exception {
+        Optional.ofNullable(reqDto.getShopId()).orElseThrow(() -> new Exception("店铺id不能为空"));
+
+        //审核通过
+        boolQuery.filter(QueryBuilders.termQuery("skuInfos.status", 1));
+
+        //未选及部分选
+        if (reqDto.getStatus() != null && reqDto.getStatus() == 0) {
+            boolQuery.should(QueryBuilders.termsQuery("skuInfos.selectedShops", Lists.newArrayList(reqDto.getShopId())))
+                    .should(QueryBuilders.termsQuery("skuInfos.selectingShops", Lists.newArrayList(reqDto.getShopId())))
+                    .minimumShouldMatch(1);
+        }
+
+        if (StringUtils.isNotBlank(reqDto.getSpuOrSku())) {
+           boolQuery.filter(QueryBuilders.termsQuery("skuInfos.skuId", reqDto.getSpuOrSku()));
+        }
+        //品牌
+        Optional.ofNullable(reqDto.getBrandId()).ifPresent(brandId ->
+                boolQuery.filter(QueryBuilders.termQuery("brandId", brandId)));
+        //供应商
+        Optional.ofNullable(reqDto.getProviderId()).ifPresent(providerId ->
+                boolQuery.filter(QueryBuilders.termQuery("providerId", providerId)));
+        //TODO 仓库地址
+        if (StringUtils.isNotBlank(reqDto.getWarehouseLocation())) {
+            boolQuery.filter(QueryBuilders.nestedQuery("inventoryInfos",
+                    QueryBuilders.termsQuery("inventoryInfos.warehouseId", reqDto.getWarehouseLocation()), ScoreMode.None));
+        }
+        //TODO 关键字 品类 品牌?
+        if (StringUtils.isNotBlank(reqDto.getKeyword())) {
+            boolQuery.filter(QueryBuilders.multiMatchQuery(reqDto.getKeyword(), "productModel", "productName"));
+        }
+        //品类
+        Optional.ofNullable(reqDto.getCategoryId()).ifPresent(categoryId ->
+                boolQuery.filter(QueryBuilders.wildcardQuery("categoryIdPath", "*" + categoryId + "*")));
+        //语言
+        if (StringUtils.isNotBlank(reqDto.getLanguage())) {
+            boolQuery.filter(QueryBuilders.termQuery("language", reqDto.getLanguage()));
+        }
+        //币别
+        if (StringUtils.isNotBlank(reqDto.getCurrency())) {
+            boolQuery.filter(QueryBuilders.termQuery("currency", reqDto.getCurrency()));
+        }
+        RangeQueryBuilder priceRange = null;
+        //价格from
+        if (reqDto.getPriceFrom() != null) {
+            priceRange = QueryBuilders.rangeQuery("skuInfos.retailPrice").from(reqDto.getPriceFrom());
+        }
+        //价格to
+        if (reqDto.getPriceTo() != null) {
+            if (priceRange == null) {
+                priceRange = QueryBuilders.rangeQuery("skuInfos.retailPrice").to(reqDto.getPriceTo());
+            } else {
+                priceRange.to(reqDto.getPriceTo());
+            }
+        }
+        if (priceRange != null) {
+            boolQuery.filter(priceRange);
+        }
+
+        RangeQueryBuilder quantityRange = null;
+        //库存from
+        if (reqDto.getQuantityFrom() != null) {
+            quantityRange = QueryBuilders.rangeQuery("inventoryInfos.itemQuantities.quantity").from(reqDto.getQuantityFrom());
+        }
+        //库存to
+        if (reqDto.getQuantityTo() != null) {
+            if (quantityRange == null) {
+                quantityRange = QueryBuilders.rangeQuery("inventoryInfos.itemQuantities.quantity").to(reqDto.getQuantityTo());
+            } else {
+                quantityRange.to(reqDto.getQuantityTo());
+            }
+        }
+        if (quantityRange != null) {
+            boolQuery.filter(QueryBuilders.nestedQuery("inventoryInfos.itemQuantities", quantityRange, ScoreMode.None));
+        }
+
+        //价格降幅
+        Optional.ofNullable(reqDto.getDiscountPercent()).ifPresent(discountPercent -> {
+            if (discountPercent > 0) {
+                boolQuery.filter(QueryBuilders.rangeQuery("skuInfos.discount").to((double) discountPercent / -100.0)
+                        .includeLower(true).includeUpper(false));
+            }
+        });
+        //上架时间
+        Optional.ofNullable(reqDto.getOnSaleTime()).ifPresent(onSaleTime -> {
+            if (onSaleTime > 0) {
+                String time = sdf.format(new Date(System.currentTimeMillis() - onSaleTime * 3600000 * 24L));
+                boolQuery.filter(QueryBuilders.rangeQuery("skuInfos.onlineTime").from(time));
+            }
+        });
+        return true;
     }
 
     private Page<ProductSearchRespDto> buildFromSearchResponse(Long shopId, SearchResponse response, Integer pageNum,
@@ -190,8 +248,6 @@ public class ProductSearchServiceImpl implements ProductSearchService {
 
                         data.add(dto);
                     }
-
-
                     page.setResults(data);
                 }
             } else {
@@ -202,9 +258,7 @@ public class ProductSearchServiceImpl implements ProductSearchService {
 
         return page;
     }
-
-
-    private ProductSearchRespDto buildProductSearchRespDto(Long shopId, SearchHit searchHit) throws IOException {
+    private ProductSearchRespDto buildProductSearchRespDto(Long shopId, SearchHit searchHit) throws Exception {
         ProductIndex productIndex = objectMapper.readValue(searchHit.getSourceAsString(), ProductIndex.class);
         ProductSearchRespDto dto = new ProductSearchRespDto();
         dto.setProductId(productIndex.getProductId());
@@ -265,36 +319,61 @@ public class ProductSearchServiceImpl implements ProductSearchService {
     }
 
     @Override
-    public Map<Integer, Long> priceDiscountPercentCount(List<Integer> discountPercentList) throws Exception {
+    public Map<Integer, Long> priceDiscountPercentCount(ProductSearchReqDto reqDto) throws Exception {
+
+        reqDto.setPageNum(null);
+        reqDto.setPageSize(null);
+
         MultiSearchRequest multiSearchRequest = new MultiSearchRequest();
-        for (int i = 0; i < discountPercentList.size(); i++) {
-            Integer from = i > 0 ? discountPercentList.get(i) : null;
-            Integer to = i == 0 ? discountPercentList.get(1) : null;
-            multiSearchRequest.add(buildPriceDiscountPercentCountRequest(from, to));
+        String[] percentList = discountPercentList.split(",");
+
+        Map<Integer, Long> countMap = Maps.newHashMapWithExpectedSize(percentList.length);
+        for (int i = 0; i < percentList.length; i++) {
+            Integer from = (i == 0 ? Integer.valueOf(percentList[1]) : null);
+            Integer to = (i == 0 ? 0 : Integer.valueOf(percentList[i]));
+            countMap.put(Integer.valueOf(percentList[i]), 0L);
+
+            SearchRequest req = buildPriceDiscountPercentCountRequest(reqDto, from, to, i);
+            Optional.ofNullable(req).ifPresent(multiSearchRequest::add);
         }
         logger.info("buildPriceDiscountPercentCountRequest multiSearchRequest=" + multiSearchRequest.requests());
+        if (CollectionUtils.isEmpty(multiSearchRequest.requests())) {
+            return countMap;
+        }
         MultiSearchResponse multiResponse = restHighLevelClient.multiSearch(multiSearchRequest);
         logger.info("priceDiscountPercentCount multiResponse=" + multiResponse.toString());
 
-        Map<Integer, Long> countMap = Maps.newHashMapWithExpectedSize(discountPercentList.size());
         for (int i = 0; i < multiResponse.getResponses().length; i++) {
             MultiSearchResponse.Item item = multiResponse.getResponses()[i];
             SearchResponse response = item.getResponse();
             if (RestStatus.OK.equals(response.status())) {
-                countMap.put(discountPercentList.get(i), response.getHits().totalHits);
+                for (int j = 0; j < percentList.length; j++) {
+                    Aggregation data = response.getAggregations().getAsMap().get("productId_" + j);
+                    if (data != null) {
+                        countMap.put(Integer.valueOf(percentList[j]), ((ParsedValueCount) data).getValue());
+                    }
+                }
             }
         }
         return countMap;
     }
 
-    private SearchRequest buildPriceDiscountPercentCountRequest(Integer discountPercentFrom, Integer discountPercentTo) {
+    private SearchRequest buildPriceDiscountPercentCountRequest(ProductSearchReqDto dto, Integer from, Integer to, int index) throws Exception {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-        RangeQueryBuilder rangeQueryBuilder = QueryBuilders.rangeQuery("skuInfos.discount").includeLower(true);
-        Optional.ofNullable(discountPercentFrom).ifPresent(df -> rangeQueryBuilder.from(df / -100.0));
-        Optional.ofNullable(discountPercentTo).ifPresent(dt -> rangeQueryBuilder.to(dt / -100.0));
-
-        sourceBuilder.query(rangeQueryBuilder).size(0);
+        BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+        if (!needQuery(dto, boolQuery)) {
+            return null;
+        }
+        RangeQueryBuilder rangeQueryBuilder = QueryBuilders.rangeQuery("skuInfos.discount").includeUpper(true);
+        Optional.ofNullable(from).ifPresent(df -> rangeQueryBuilder.from(df == 0 ? 0 : df / -100.0));
+        Optional.ofNullable(to).ifPresent(dt -> rangeQueryBuilder.to(dt == 0 ? 0 : dt / -100.0));
+        boolQuery.must(rangeQueryBuilder);
+        sourceBuilder.query(boolQuery);
         sourceBuilder.fetchSource(false);
+        sourceBuilder.size(0);
+//        sourceBuilder.trackTotalHits(false);
+
+        sourceBuilder.aggregation(AggregationBuilders.count("productId_" + index).field("productId"));
 
         logger.info("buildPriceDiscountPercentCountRequest sourceBuilder=" + sourceBuilder.toString());
         return new SearchRequest(new String[]{indexName}, sourceBuilder);
@@ -327,8 +406,6 @@ public class ProductSearchServiceImpl implements ProductSearchService {
                     skuIds.add(dto.getSkuId());
                     providerIds.add(dto.getProviderId());
                 });
-
-
 
                 return result;
             }

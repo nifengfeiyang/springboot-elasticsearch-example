@@ -29,10 +29,10 @@ public interface ProductSearchService {
     /**
      * 价格降幅数量统计
      *
-     * @param discountPercentList
+     * @param reqDto
      * @return
      */
-    Map<Integer, Long> priceDiscountPercentCount(List<Integer> discountPercentList) throws Exception;
+    Map<Integer, Long> priceDiscountPercentCount(ProductSearchReqDto reqDto) throws Exception;
 
     /**
      * sku选品列表

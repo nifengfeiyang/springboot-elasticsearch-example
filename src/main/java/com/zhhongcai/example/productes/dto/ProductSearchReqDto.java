@@ -48,6 +48,8 @@ public class ProductSearchReqDto {
     private String sortItem;
     @ApiModelProperty(value = "排序:ASC,DESC")
     private String sortType;
+    @ApiModelProperty(value = "选品状态: 全部：-1,未选及部分选:0")
+    private Integer status;
 
     @ApiModelProperty(value = "第几页")
     private Integer pageNum;
