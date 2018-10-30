@@ -21,8 +21,12 @@
 
 # elasticsearch的CRUD
 
-查看版本
+查看版本:
+
 curl -XGET http://localhost:9200
+
+返回:
+
 {
   "name" : "zDOs--s",
   "cluster_name" : "docker-cluster",
@@ -38,4 +42,175 @@ curl -XGET http://localhost:9200
   },
   "tagline" : "You Know, for Search"
 }
+
+创建index mapping:
+
+curl -XPUT http://locahost:9200/product_index -d '
+{
+    "mappings": {
+        "_doc": {
+            "properties": {
+                "brandId": {
+                    "type": "long"
+                },
+                "categoryId": {
+                    "type": "long"
+                },
+                "categoryIdPath": {
+                    "type": "text",
+                    "fields": {
+                        "keyword": {
+                            "type": "keyword",
+                            "ignore_above": 256
+                        }
+                    }
+                },
+                "categoryId_path": {
+                    "type": "keyword"
+                },
+                "currency": {
+                    "type": "keyword"
+                },
+                "detail": {
+                    "type": "text"
+                },
+                "inventoryInfos": {
+                    "type": "nested",
+                    "properties": {
+                        "itemQuantities": {
+                            "type": "nested",
+                            "properties": {
+                                "itemId": {
+                                    "type": "long"
+                                },
+                                "quantity": {
+                                    "type": "integer"
+                                }
+                            }
+                        },
+                        "warehouseId": {
+                            "type": "long"
+                        }
+                    }
+                },
+                "keyword": {
+                    "type": "text"
+                },
+                "language": {
+                    "type": "keyword"
+                },
+                "productId": {
+                    "type": "long"
+                },
+                "productModel": {
+                    "type": "keyword"
+                },
+                "productName": {
+                    "type": "text"
+                },
+                "providerId": {
+                    "type": "long"
+                },
+                "skuInfos": {
+                    "properties": {
+                        "createTime": {
+                            "type": "date",
+                            "format": "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis"
+                        },
+                        "discount": {
+                            "type": "double"
+                        },
+                        "offlineTime": {
+                            "type": "date",
+                            "format": "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis"
+                        },
+                        "onlineTime": {
+                            "type": "date",
+                            "format": "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis"
+                        },
+                        "retailPrice": {
+                            "type": "double"
+                        },
+                        "salesVolume": {
+                            "type": "integer"
+                        },
+                        "selectedShops": {
+                            "type": "long"
+                        },
+                        "selectingShops": {
+                            "type": "long"
+                        },
+                        "sku": {
+                            "type": "keyword"
+                        },
+                        "skuId": {
+                            "type": "long"
+                        },
+                        "status": {
+                            "type": "integer"
+                        },
+                        "tagPrice": {
+                            "type": "double"
+                        },
+                        "unselectingShops": {
+                            "type": "long"
+                        }
+                    }
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        }
+    }
+}
+'
+
+查看结果：
+
+curl -XGET http://localhost:9200/product_index/_doc/_mapping
+
+修改index设置(否则插入数据时会报错：FORBIDDEN/12/index-read-only):
+
+curl -XPUT http://localhost:9200/product_index/_settings -d '{
+    "index": {
+        "blocks": {
+            "read_only_allow_delete": "false"
+        }
+    }
+}'
+
+插入一条数据:
+
+curl -XPOST http://localhost:9200/product_index/_doc/228878077351166418 -d '
+{
+  "productId": 228878077351166418,
+  "productModel": "PSKU-icecream2072500032",
+  "productName": "3D printing flower Korean version glossy women non-slip sandals sliper indoors/outdoor flip-flop",
+  "brandId": 220923510746775563,
+  "categoryId": 228525066177937409,
+  "categoryIdPath": "228525066177937409",
+  "providerId": 200269873509105689,
+  "language": "english",
+  "currency": "USD",
+  "status": 1,
+  "detail": null,
+  "keyword": null,
+  "skuInfos": [
+    {
+      "skuId": 228878077556687331,
+      "sku": "SKU-icecream2072500032",
+      "tagPrice": 1000,
+      "retailPrice": 900,
+      "status": 1,
+      "discount": 0,
+      "createTime": "2018-07-25 13:59:46",
+      "onlineTime": "2018-07-25 14:42:54",
+      "offlineTime": null,
+      "salesVolume": 0
+    }
+  ]
+}'
+
+
 
