@@ -45,7 +45,7 @@ curl -XGET http://localhost:9200
 
 创建index mapping:
 
-curl -XPUT http://locahost:9200/product_index -d '
+curl -XPUT -H "Content-Type:application/json" http://localhost:9200/product_index -d '
 {
     "mappings": {
         "_doc": {
@@ -168,11 +168,11 @@ curl -XPUT http://locahost:9200/product_index -d '
 
 查看结果：
 
-curl -XGET http://localhost:9200/product_index/_doc/_mapping
+curl -XGET http://localhost:9200/product_index/_doc/_mapping?pretty
 
 修改index设置(否则插入数据时会报错：FORBIDDEN/12/index-read-only):
 
-curl -XPUT http://localhost:9200/product_index/_settings -d '{
+curl -XPUT -H "Content-Type:application/json" http://localhost:9200/product_index/_settings -d '{
     "index": {
         "blocks": {
             "read_only_allow_delete": "false"
@@ -182,7 +182,7 @@ curl -XPUT http://localhost:9200/product_index/_settings -d '{
 
 插入一条数据:
 
-curl -XPOST http://localhost:9200/product_index/_doc/228878077351166418 -d '
+curl -XPOST -H "Content-Type:application/json" http://localhost:9200/product_index/_doc/228878077351166418 -d '
 {
   "productId": 228878077351166418,
   "productModel": "PSKU-icecream2072500032",
@@ -211,6 +211,10 @@ curl -XPOST http://localhost:9200/product_index/_doc/228878077351166418 -d '
     }
   ]
 }'
+
+查询:
+
+curl -XGET http://localhost:9200/product_index/_doc/228878077351166418?pretty
 
 
 
