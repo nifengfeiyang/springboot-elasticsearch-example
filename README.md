@@ -27,6 +27,7 @@ curl -XGET http://localhost:9200
 
 返回:
 
+```json
 {
   "name" : "zDOs--s",
   "cluster_name" : "docker-cluster",
@@ -42,10 +43,12 @@ curl -XGET http://localhost:9200
   },
   "tagline" : "You Know, for Search"
 }
+```
 
 创建index mapping:
 
 curl -XPUT -H "Content-Type:application/json" http://localhost:9200/product_index -d '
+```json
 {
     "mappings": {
         "_doc": {
@@ -164,6 +167,7 @@ curl -XPUT -H "Content-Type:application/json" http://localhost:9200/product_inde
         }
     }
 }
+```
 '
 
 查看结果：
@@ -172,17 +176,22 @@ curl -XGET http://localhost:9200/product_index/_doc/_mapping?pretty
 
 修改index设置(否则插入数据时会报错：FORBIDDEN/12/index-read-only):
 
-curl -XPUT -H "Content-Type:application/json" http://localhost:9200/product_index/_settings -d '{
+curl -XPUT -H "Content-Type:application/json" http://localhost:9200/product_index/_settings -d '
+```json
+{
     "index": {
         "blocks": {
             "read_only_allow_delete": "false"
         }
     }
-}'
+}
+```
+'
 
 插入一条数据:
 
 curl -XPOST -H "Content-Type:application/json" http://localhost:9200/product_index/_doc/228878077351166418 -d '
+```json
 {
   "productId": 228878077351166418,
   "productModel": "PSKU-icecream2072500032",
@@ -210,7 +219,9 @@ curl -XPOST -H "Content-Type:application/json" http://localhost:9200/product_ind
       "salesVolume": 0
     }
   ]
-}'
+}
+```
+'
 
 查询:
 
