@@ -1,5 +1,6 @@
 package com.zhhongcai.example.productes.controller;
 
+import com.google.common.base.Preconditions;
 import com.zhhongcai.example.productes.dto.AjaxRes;
 import com.zhhongcai.example.productes.dto.ProductSearchReqDto;
 import com.zhhongcai.example.productes.service.ProductSearchService;
@@ -9,6 +10,7 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -48,12 +50,11 @@ public class ProductESController extends BaseController {
 
     @GetMapping("/priceDiscountPercentCount")
     @ApiOperation("价格降幅数量统计")
-    public AjaxRes priceDiscountPercentCount(@ApiParam(value = "百分比列表: [0,5,10,20,30,40] ", name = "percentList", required = true, allowMultiple = true)
-                                             @RequestParam(name = "percentList") List<Integer> percentList) throws Exception {
-        if (CollectionUtils.isEmpty(percentList)) {
-            return new AjaxRes(AjaxRes.FAIL, "请求参数不能为空");
-        }
-        return new AjaxRes(productSearchService.priceDiscountPercentCount(percentList));
+    public AjaxRes priceDiscountPercentCount(@ModelAttribute ProductSearchReqDto request) throws Exception {
+        Preconditions.checkArgument(request != null, "请求参数不能为空");
+        Preconditions.checkArgument(request.getShopId() != null, "请求参数店铺id不能为空");
+
+        return new AjaxRes(productSearchService.priceDiscountPercentCount(request));
     }
 
     @GetMapping("/listSelectingSku")

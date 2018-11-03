@@ -229,3 +229,17 @@ curl -XGET http://localhost:9200/product_index/_doc/228878077351166418?pretty
 
 
 
+##Elasticsearch查询：
+
+|  Query Name |  Functions   |   Sample Query   | Matching Text |     Not Matching Text    |
+|-------------|--------------|------------------|---------------|--------------------------|
+|  term |   |   |   |   |
+|  range |   |   |   |   |
+|  wildcard | 通配符查询,支持的通配符*(匹配任意个字符)和?（匹配一个字符）,比较慢，不应该使用*或?开头  |   |   |   |
+|  regexp | 正则表达式匹配  |   |   |    |
+|  fuzzy |  计算字符串相似度算法(Levenshtein)  |   |   |    |
+|  ids | 根据_uid字段查询  |   |   |    |
+|  match |   |   |   |    |
+|  match |   |   |   |    |
+|  match |   |   |   |    |
+
