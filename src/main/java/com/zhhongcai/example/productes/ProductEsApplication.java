@@ -3,6 +3,7 @@ package com.zhhongcai.example.productes;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
+import net.unicon.cas.client.configuration.EnableCasClient;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
@@ -14,6 +15,7 @@ import java.text.SimpleDateFormat;
 @Configuration
 @EnableSwagger2
 @SpringBootApplication
+@EnableCasClient
 public class ProductEsApplication {
 
     @Bean
